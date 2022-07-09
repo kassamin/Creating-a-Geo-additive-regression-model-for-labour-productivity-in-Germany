@@ -1,0 +1,909 @@
+documentclass{beamer}
+\mode<presentation>
+{
+ \usetheme{AnnArbor}      
+  \usecolortheme{seahorse}
+  \usefonttheme{default}
+  \setbeamertemplate{navigation symbols}{} 
+      \setbeamertemplate{footline}{%
+       \raisebox{5pt}{\makebox[0.98\paperwidth]{\hfill\makebox[10pt]{\scriptsize\insertframenumber}}}}%
+  
+ }
+
+\usepackage{amsmath}  %Package for formulas
+
+\usepackage{graphicx} %Packages for graphical representation
+\usepackage{subcaption}
+\usepackage{caption}
+
+\usepackage{tabularx} %Packages for tables
+\usepackage{booktabs}
+\usepackage{dcolumn}
+
+\usepackage[backend=biber,
+            sortcites=true,
+            sorting=nyt,
+            citetracker=false,
+            ibidtracker=false,% avoids replacing repeatedly ocurring authors with ---
+            style=authoryear, % american citation style
+            doi=true,
+            isbn=false,
+            url=false,
+            giveninits=true,
+            uniquename=init,
+            maxnames=3]{biblatex}
+
+
+\renewcommand*{\bibfont}{\tiny}
+
+% % Bibliografie-Datei (erstellt mit JabRef) laden
+% %%---------------------------------
+\addbibresource{qlib.bib}
+
+
+\title{Arbeitsproduktivit{\"a}t {\"u}ber Zeit und Raum in Deutschland}
+\subtitle{\textit{Seminar Quantitative Regionalforschung}} %Doppelbackslash für neueZeile
+\author{Amin Kassab \\ \href{mailto.Amin.Kassab@rub.de}{Amin.Kassab@rub.de}}
+\institute{Ruhr-Universit{\"a}t Bochum, Germany} 
+\date{13.07.2020}
+
+
+%------------------------------------------------------------------------
+
+\begin{document}
+
+
+%------------------------------------------------------------------------
+
+
+<<setup, echo=F>>=
+
+if(FALSE) {
+ 
+  Sys.setenv(RSTUDIO_PDFLATEX = Sys.which("latexmk"))
+  
+  setwd(dirname(getActiveDocumentContext()$path))
+}
+
+
+# load knitr and set options
+library(knitr)
+
+opts_chunk$set(cache = F,            # cache everything?
+               echo = F,             # show R-code?
+               eval = F,             # execute R-code
+               width = 60,           # number of characters per line
+               fig.align = 'center', # center figures
+               #fig.width = 5,        # width of figures 5", adapt if you want
+               #fig.height = 5,       # height of figures 5", adapt if you want
+               error = TRUE,         # show errors
+               warning = FALSE,      # hide warning messages
+               message = FALSE,      # hide hints
+               comment = NA,         # comment output, ##
+               tidy = FALSE)         # format R-code output?
+
+
+options(scipen = 1, digits = 2)
+
+
+@
+
+<<data, eval=T, echo=F>>=
+
+load("./2019_geodata.RData")
+
+library(readxl)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(R2BayesX)
+library(BayesX)
+options(bayesx.bin = "./BayesX")
+
+
+
+
+@
+
+
+<<calculations, eval=T, echo=F>>=
+
+qrrdata <- read_excel("./data_final.xls")
+qrrdata1 <- qrrdata
+
+datanonregio <- qrrdata1
+
+#Remove Preschool variable because correlation to productivity is weaker than child care at age< 3
+
+qrrdata1$presch14 <- NULL
+qrrdata1$presch15 <- NULL
+qrrdata1$presch16 <- NULL
+qrrdata1$presch17 <- NULL
+
+
+
+qrrdata1$logprod17 <- log(qrrdata1$prod17)
+qrrdata1$logprod16<- log(qrrdata1$prod16)
+qrrdata1$logprod15 <- log(qrrdata1$prod15)
+qrrdata1$logprod14 <- log(qrrdata1$prod14)
+
+qrrdata1$logacad14 <- log(qrrdata1$acad14)
+qrrdata1$logacad15 <- log(qrrdata1$acad15)
+qrrdata1$logacad16 <- log(qrrdata1$acad16)
+qrrdata1$logacad17 <- log(qrrdata1$acad17)
+
+qrrdata1$logyounemp14 <- log(qrrdata1$younemp14)
+qrrdata1$logyounemp15 <- log(qrrdata1$younemp15)
+qrrdata1$logyounemp16 <- log(qrrdata1$younemp16)
+qrrdata1$logyounemp17 <- log(qrrdata1$younemp17)
+
+qrrdata1$logchildc14 <- log(qrrdata1$childc14)
+qrrdata1$logchildc15 <- log(qrrdata1$childc15)
+qrrdata1$logchildc16 <- log(qrrdata1$childc16)
+qrrdata1$logchildc17 <- log(qrrdata1$childc17)
+
+#Transform hours variable to weekly hours per worker
+
+qrrdata1$weeklyhours14 <- (qrrdata1$hours14)/52
+qrrdata1$weeklyhours15 <- (qrrdata1$hours15)/52
+qrrdata1$weeklyhours16 <- (qrrdata1$hours16)/52
+qrrdata1$weeklyhours17 <- (qrrdata1$hours17)/52
+
+#Merge with geodata for plotting maps
+
+mergeqrrgeo <- merge(plotgeo, qrrdata1, by.x = "id", by.y = "id", all.x = TRUE)
+qrrplotting <- mergeqrrgeo[order(mergeqrrgeo$order), ]
+
+qrrplotting$longitude <- qrrplotting$long*0.00001
+qrrplotting$latitude <- qrrplotting$lat*0.00001
+
+#Topvalues
+
+qrrtopprod17 <- arrange(qrrdata1, qrrdata1$logprod17)
+topprod17 <- select(qrrtopprod17, municipalitiy, aggregate, logprod17)
+
+#reshape data to long format
+
+
+qrrlong <- gather(qrrdata1, varname, varvalue, prod14:weeklyhours17)
+
+right = function(text, num_char) {
+  substr(text, nchar(text) - (num_char-1), nchar(text))
+}
+left = function(text, num_char) {
+  substr(text, 1, num_char)
+}
+
+qrrlong$year <- right(qrrlong$varname, 2)
+qrrlong$year <- as.numeric(as.character(qrrlong$year))
+
+qrrlong$varname <- substr(qrrlong$varname, 1, nchar(qrrlong$varname)-2)
+qrrlong <- spread(qrrlong, varname, varvalue)
+
+#create dummy variable for East-Germany and year
+
+qrrlong1 <- qrrlong
+qrrlong1$east = 0
+qrrlong1$east[qrrlong1$id > 11000] = 1
+qrrlong1$year.f <- factor(qrrlong1$year)
+
+
+#set up linear model with east dummy
+
+linear1 <- lm(qrrlong1$logprod ~ qrrlong1$logacad +  qrrlong1$logyounemp + qrrlong1$childc + qrrlong1$east+ qrrlong1$year.f)
+
+
+linear2 <- lm(qrrlong1$logprod ~ qrrlong1$logacad + qrrlong1$weeklyhours + qrrlong1$logyounemp + qrrlong1$east+ qrrlong1$year.f)
+
+
+lm1coefficients <- summary(linear1)$coefficients
+lm1rse <- summary(linear1)$sigma
+lm1rsquared <- summary(linear1)$r.squared
+lm1fstat <- summary(linear1)$fstatistic
+
+lm2coefficients <- summary(linear2)$coefficients
+lm2rse <- summary(linear2)$sigma
+lm2rsquared <- summary(linear2)$r.squared
+lm2fstat <- summary(linear2)$fstatistic
+
+
+
+bayesformel1 <- logprod ~ logacad + logyounemp + sx(logchildc) + year + east + sx(id, bs="gk", map=admbnd)
+bayesmodel1 <- bayesx(bayesformel1, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+bayesformel2 <- logprod ~ logacad + logyounemp + logchildc + year + east + sx(id, bs="gk", map=admbnd)
+bayesmodel2 <- bayesx(bayesformel2, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+bayesformel3 <- logprod ~ logacad + logyounemp + sx(logchildc) + sx(year) + east + sx(id, bs="gk", map=admbnd)
+bayesmodel3 <- bayesx(bayesformel3, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+spatialsm1 <- bayesmodel1[["effects"]][["sx(id)"]]
+
+spatialsm1$`2.5%` <- NULL
+spatialsm1$`10%` <- NULL
+spatialsm1$`90%` <- NULL
+spatialsm1$`97.5%` <- NULL
+spatialsm1$pcat95 <- NULL
+spatialsm1$pcat80 <- NULL
+
+colnames(spatialsm1) = c("id", "long", "lat", "estimate", "standard error")
+
+#Merge spatial effects with plotting dataset
+
+plottingspatial <- merge(qrrplotting, spatialsm1, by.x = "id", by.y = "id", all.x = TRUE)
+plottingspatial <- plottingspatial[order(plottingspatial$order), ] 
+
+
+
+@
+
+
+\begin{frame}[plain] 
+  \titlepage
+\end{frame}
+
+%--------------------------------------------------------------------------
+
+
+\begin{frame}{Inhalt}
+ \tableofcontents
+\end{frame}
+
+%--------------------------------------------------------------------------
+
+\section{Arbeitsproduktivit{\"a}t}
+
+%--------------------------------------------------------------------------
+
+\subsection{Relevanz}
+
+%--------------------------------------------------------------------------
+
+
+\begin{frame}{Arbeitsproduktivit{\"a}t}{Relevanz}
+
+
+\begin{itemize}
+ \item F{\"u}r Unternehmen
+ \item F{\"u}r Arbeitnehmer 
+ \item F{\"u}r politische Entscheidungen
+\end{itemize}
+\end{frame}
+
+%--------------------------------------------------------------------------
+
+
+\subsection{R{\"a}umliche Unterschiede in Deutschland}
+
+\begin{frame}[fragile]{Arbeitsproduktivit{\"a}t}{R{\"a}umliche Unterschiede in Deutschland}
+\begin{figure}
+\begin{subfigure}[b]{0.7\textheight}
+\centering
+
+<<simplemap, eval=T, echo=F>>=
+
+prodmap17 <- ggplot() +
+  geom_polygon(data = qrrplotting, 
+               aes(x = longitude, y = latitude, group = group, fill = logprod17), 
+               color = "grey", size = 0.1) + 
+  coord_map() +  
+  theme_void() +
+  scale_fill_gradient(
+    name = "Log Productivity",
+    low = "#ffffcc",
+    high = "#800026",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+
+print(prodmap17)
+@
+
+\caption{Arbeitsproduktivit{\"a}t in Deutschland 2017}
+\end{subfigure}
+\end{figure}
+
+\end{frame}
+
+%-----------------------------------------------------------------------
+
+\subsection{Bestimmende Faktoren}
+
+%-----------------------------------------------------------------------
+
+\begin{frame}[fragile]{Arbeitsproduktivit{\"a}t}{Bestimmende Faktoren}
+
+\begin{figure}
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<acadmap, eval=T, echo=F>>=
+
+acadmap17 <- ggplot() +
+  geom_polygon(data = qrrplotting, 
+               aes(x = longitude, y = latitude, group = group, fill = logacad17), 
+               color = "grey", size = 0.1) + 
+  coord_map() +  
+  theme_void() +
+  scale_fill_gradient(
+    name = "log academic",
+    low = "#ffffcc",
+    high = "#800026",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+
+print(acadmap17)
+@
+
+\caption{Anteil Besch{\"a}ftigter mit akademischem Abschluss 2017}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<acadprod, eval=T, echo=F>>=
+
+plot(qrrdata1$logprod17, qrrdata1$logacad17, xlab = "log productivity", ylab = "log academic") 
+
+@
+
+\caption{Korrelation mit Arbeitsproduktivit{\"a}t} 
+\end{subfigure}
+\caption{Akademische Abschl{\"u}sse \parencite{Andersson2009}}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Arbeitsproduktivit{\"a}t}{Bestimmende Faktoren}
+
+\begin{figure}
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<unempmap, eval=T, echo=F>>=
+
+younempmap17 <- ggplot() +
+  geom_polygon(data = qrrplotting, 
+               aes(x = longitude, y = latitude, group = group, fill = logyounemp17), 
+               color = "grey", size = 0.1) + 
+  coord_map() +  
+  theme_void() +
+  scale_fill_gradient(
+    name = "log youthunemp.",
+    low = "#ffffcc",
+    high = "#800026",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+
+print(younempmap17)
+@
+
+\caption{Arbeitslosigkeit bei unter 25-J{\"a}hrigen in Deutschland 2017}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<unempprod, eval=T, echo=F>>=
+
+plot(qrrdata1$logprod17, qrrdata1$logyounemp17, xlab = "log productivity", ylab = "log youthunemployment") 
+
+@
+
+\caption{Korrelation mit Arbeitsproduktivit{\"a}t} 
+\end{subfigure}
+\caption{Jugendarbeitslosigkeit \parencite{Kluve2019}}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Arbeitsproduktivit{\"a}t}{Bestimmende Faktoren}
+
+\begin{figure}
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<childcmap, eval=T, echo=F>>=
+
+childcmap17 <- ggplot() +
+  geom_polygon(data = qrrplotting, 
+               aes(x = longitude, y = latitude, group = group, fill = logchildc17), 
+               color = "grey", size = 0.1) + 
+  coord_map() +  
+  theme_void() +
+  scale_fill_gradient(
+    name = "log childcare",
+    low = "#ffffcc",
+    high = "#800026",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+
+print(childcmap17)
+@
+
+\caption{Betreuungsquote von Kleinkindern in Deutschland 2017}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<childcprod, eval=T, echo=F>>=
+
+plot(qrrdata1$logprod17, qrrdata1$logchildc17, xlab = "log productivity", ylab = "log childcare") 
+
+@
+
+\caption{Korrelation mit Arbeitsproduktivit{\"a}t} 
+\end{subfigure}
+\caption{Kleinkinder-Betreuung \parencite{Bjurek1992}}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Arbeitsproduktivit{\"a}t}{Bestimmende Faktoren}
+
+\begin{figure}
+\begin{subfigure}[b]{0.5\textheight}
+\centering
+
+<<hourschild, eval=T, echo=F>>=
+
+plot(qrrdata1$logchildc17, qrrdata1$weeklyhours17, xlab = "log Childcare", ylab = "weeklyhours")
+
+@
+
+\caption{Kleinkinderbetreuung und Wochenstunden 2017}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.5\textheight}
+\centering
+
+<<hoursprod, eval=T, echo=F>>=
+
+plot(qrrdata1$logprod17, qrrdata1$weeklyhours17, xlab = "log productivity", ylab = "weeklyhours")
+
+@
+
+\caption{Wochenstunden und Arbeitsproduktivit{\"a}t 2017}
+\end{subfigure}
+\caption{Approximation durch geleistete Wochenstunden je Arbeitnehmer \parencite{Pencavel2014}}
+\end{figure}
+
+
+
+\begin{itemize}
+\item \textbf{Problem:} Umgekehrte Kausalit{\"a}t
+\end{itemize}
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\section{Lineares Modell}
+
+%-------------------------------------------------------------
+
+\subsection{Modellierung}
+
+%-------------------------------------------------------------
+
+\begin{frame}{Lineares Modell}{Modellierung}
+
+\begin{block}{Daten}
+  \begin{itemize}
+  \item Bundesinstitut f{\"u}r Bau-, Stadt- und Raumforschung
+  \item Beobachtungszeitraum 2014-2017
+  \item 401 Regionen auf NUTS-3 Ebene
+  \end{itemize}
+\end{block}
+
+\vskip 1cm
+
+\begin{block}{Abh{\"a}ngige Variable}
+  Bruttoinlandsprodukt je Erwerbst{\"a}tigen in 1000 Euro
+\end{block}
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Lineares Modell}{Modellierung}
+
+\begin{block}{Unabh{\"a}ngige Variablen}
+  \begin{itemize}
+  \item Anteil Besch{\"a}ftigte mit akademischem Abschluss
+  \item Arbeitslosenquote bei unter 25-J{\"a}hrigen
+  \item Betreuungsquote von Kleinkindern unter 3 Jahren
+  \item Durchschnittliche geleistete Wochenstunden der Arbeitnehmer
+  \item Ostdeutschland Dummy-Variable
+  \item Jahresdummy
+  \end{itemize}
+\end{block}
+
+\vskip 0.5cm
+
+\begin{block}{Lineares Modell}
+
+$log(y_{it})= \beta_0 + \beta_i*log(X_{it}) + \beta_i*east_i + \beta_i*year_t + u_{it}$
+
+\end{block}
+
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\subsection{Ergebnisse}
+
+%-------------------------------------------------------------
+%Regression mit childc
+
+\begin{frame}[fragile]{Lineares Modell}{Ergebnisse}
+
+\begin{table}
+\centering
+\footnotesize
+\begin{tabular}{ll}
+\toprule
+
+
+Abh{\"a}ngige Variable: Log BIP je Erwerbst{\"a}tigen \\
+
+\midrule
+
+<<lm1coefficients, eval=T, echo=F>>=
+
+print(lm1coefficients)
+
+@
+
+ \\
+\bottomrule
+
+Residual squared error 
+
+<<lm1rse, eval=T, echo=F>>=
+
+print(lm1rse)
+
+@
+\\
+
+R-squared 
+
+<<lm1rsquared, eval=T, echo=F>>=
+ 
+print(lm1rsquared)
+
+@
+\\
+
+F-statistic
+
+<<lm1fstat, eval=T, echo=F>>=
+
+print(lm1fstat)
+
+@
+
+\\
+\end{tabular}
+\caption{Lineare Regression mit Betreuungsquote von Kleinkindern}
+\end{table}
+
+
+\end{frame}
+
+%-------------------------------------------------------------
+%Regression mit weeklyhours
+\begin{frame}[fragile]{Lineares Modell}{Ergebnisse}
+
+\begin{table}
+\centering
+\footnotesize
+\begin{tabular}{ll}
+\toprule
+
+Abh{\"a}ngige Variable: Log BIP je Erwerbst{\"a}tigen  \\
+
+\midrule
+
+<<lm2coefficients, eval=T, echo=F>>=
+
+print(lm2coefficients)
+
+@
+
+ \\
+\bottomrule
+
+Residual squared error 
+
+<<lm2rse, eval=T, echo=F>>=
+
+print(lm2rse)
+
+@
+\\
+
+R-squared 
+
+<<lm2rsquared, eval=T, echo=F>>=
+ 
+print(lm2rsquared)
+
+@
+\\
+
+F-statistic
+
+<<lm2fstat, eval=T, echo=F>>=
+
+print(lm2fstat)
+
+@
+
+\\
+\end{tabular}
+\caption{Lineare Regression mit geleisteten Wochenstunden je Arbeitnehmer}
+\end{table}
+
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\section{Geoadditives Modell}
+
+%-------------------------------------------------------------
+
+\subsection{Eigenschaften}
+
+%-------------------------------------------------------------
+
+\begin{frame}{Geoadditives Modell}{Eigenschaften}
+
+\begin{block}{Probleme bei der Modellierung r{\"a}umlicher Daten}
+\begin{itemize}
+
+\item Unbeobachtete Gemeinsamkeiten durch r{\"a}umliche N{\"a}he (spatial heterogeniety)
+\item {\"O}rtliche Korrelation {\"u}ber einen Zeitraum (spatial autocorrelation)
+\item Unbeobachtete Effekte f{\"u}hren zu unterschiedlicher Aussagekraft {\"u}ber Regionen (spatial residuals)
+
+\end{itemize}
+
+\textbf{Lineare Regression kann zu verzerrten Ergebnissen f{\"u}hren}
+
+\end{block}
+
+
+\begin{block}{\textbf{Geoadditives Modell:}} 
+
+Beseitigung m{\"o}glicher St{\"o}rterme durch die Gl{\"a}ttung r{\"a}umlicher Korrelationen\parencite{Kammann2003}
+
+\end{block}
+
+\end{frame}
+
+
+%-------------------------------------------------------------
+
+\begin{frame}{Geoadditives Modell}{Eigenschaften}
+
+\begin{block}{R{\"a}umliche und zeitliche Gl{\"a}ttung}
+%randomize spatial effects
+$BIP_{i,t} \sim N(log(y_{it}), \varepsilon_{it})$
+
+$$log(y_{it}) = \beta_0 + \beta_i*log(X_{it}) + f_c*(childc_{it}) + \beta_i*year_t + \beta_i*east_i  + f_{geo}*(Ort_i) + \varepsilon_{it}$$
+
+\end{block}
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\subsection{Ergebnisse}
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Geoadditives Modell}{Ergebnisse}
+
+\begin{figure}
+\begin{subfigure}[b]{0.7\textheight}
+\centering
+
+<<bmestimates, eval=T, echo=F>>=
+
+spatialsmap1 <- ggplot() +
+  geom_polygon(data = plottingspatial, 
+               aes(x = long.x, y = lat.x, group = group, fill = estimate), 
+               color = "grey", size = 0.2) + 
+  coord_map() +
+  theme_void() +
+  scale_fill_gradient(
+    name = "Estimate",
+    low = "#ffffcc",
+    high = "#800026",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+print(spatialsmap1)
+
+@
+
+\end{subfigure}
+\caption{R{\"a}umliche Residuen}
+\end{figure}
+
+\end{frame}
+
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Geoadditives Modell}{Ergebnisse}
+
+\begin{figure}
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<acadeffects, eval=T, echo=F>>=
+
+plot(bayesmodel1, term = "logacad")
+
+
+@
+
+\end{subfigure}
+\caption{Akademische Abschl{\"u}sse}
+\end{figure}
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Geoadditives Modell}{Ergebnisse}
+
+\begin{figure}
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<younempffects, eval=T, echo=F>>=
+
+plot(bayesmodel1, term = "logyounemp")
+
+@
+
+
+\end{subfigure}
+\caption{Jugendarbeitslosigkeit}
+\end{figure}
+
+\end{frame}
+
+
+%-------------------------------------------------------------
+
+
+\begin{frame}[fragile]{Geoadditives Modell}{Ergebnisse}
+
+\begin{figure}
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<childceffects, eval=T, echo=F>>=
+
+plot(bayesmodel1, term = "sx(logchildc)")
+
+@
+\caption{Gegl{\"a}ttete Effekte}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.6\textheight}
+
+<<childceffectslin, eval=T, echo=F>>=
+
+
+plot(bayesmodel2, term = "logchildc")
+
+@
+
+\caption{Lineare Effekte}
+\end{subfigure}
+\caption{Kleinkinderbetreuung}
+\end{figure}
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\begin{frame}[fragile]{Geoadditives Modell}{Ergebnisse}
+
+\begin{figure}
+\begin{subfigure}[b]{0.6\textheight}
+\centering
+
+<<timeeffects, eval=T, echo=F>>=
+
+plot(bayesmodel1, term = "year")
+
+@
+\caption{Lineare Effekte}
+\end{subfigure}
+\hfill
+\begin{subfigure}[b]{0.6\textheight}
+
+<<timenonlin, eval=T, echo=F>>=
+
+
+plot(bayesmodel3, term = "sx(year)")
+
+@
+
+\caption{Gegl{\"a}ttete Effekte}
+\end{subfigure}
+\caption{Zeitliche Effekte}
+\end{figure}
+
+\end{frame}
+
+%-------------------------------------------------------------
+
+\section{Fazit}
+
+%-------------------------------------------------------------
+
+\begin{frame}{Fazit}
+
+\begin{itemize}
+\item Produktivit{\"a}t in Metropolregionen konzentriert
+\item Zus{\"a}tzliche bestimmende Faktoren
+\item Einfluss zeitlicher Korrelation ist gering
+\item Geographische N{\"a}he ist relevant
+\item Ergebnisse in Literatur auffindbar
+\end{itemize}
+
+\end{frame}
+
+
+%-------------------------------------------------------------
+ 
+\section{Literatur}
+
+%-------------------------------------------------------------
+
+\begin{frame}{Literatur}
+
+\printbibliography
+
+\end{frame}
+
+%--------------------------------------------------------------
+
+\end{document}
+
+%%---------------------------------
+<<biber, eval=T, echo=F>>=
+system(paste(
+  "biber", knitr:::sans_ext(knitr::current_input())
+))
+@ 
