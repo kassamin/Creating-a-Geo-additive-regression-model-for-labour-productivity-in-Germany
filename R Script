@@ -1,0 +1,449 @@
+library(readxl)
+qrrdata <- read_excel("./data_final.xls") 
+load("./2019_geodata.RData")
+
+qrrdata1 <- qrrdata
+
+#Create correlation matrix
+datanonregio <- qrrdata1
+
+datanonregio$id <- NULL
+datanonregio$municipalitiy <- NULL
+datanonregio$aggregate <- NULL
+
+cordata <- cor(datanonregio)
+
+#Remove Preschool variable because correlation to productivity is weaker than child care at age< 3
+
+qrrdata1$presch14 <- NULL
+qrrdata1$presch15 <- NULL
+qrrdata1$presch16 <- NULL
+qrrdata1$presch17 <- NULL
+
+#Check for normal distribution of variables
+plot(density(qrrdata1$prod17))
+plot(density(qrrdata1$prod16))
+plot(density(qrrdata1$prod15))
+plot(density(qrrdata1$prod14))
+qrrdata1$logprod17 <- log(qrrdata1$prod17)
+qrrdata1$logprod16<- log(qrrdata1$prod16)
+qrrdata1$logprod15 <- log(qrrdata1$prod15)
+qrrdata1$logprod14 <- log(qrrdata1$prod14)
+plot(density(qrrdata1$logprod17))
+
+plot(density(qrrdata1$age14))
+
+plot(density(qrrdata1$acad14))
+plot(density(qrrdata1$acad15))
+qrrdata1$logacad14 <- log(qrrdata1$acad14)
+qrrdata1$logacad15 <- log(qrrdata1$acad15)
+qrrdata1$logacad16 <- log(qrrdata1$acad16)
+qrrdata1$logacad17 <- log(qrrdata1$acad17)
+plot(density(qrrdata1$logacad14))
+
+plot(density(qrrdata1$hours14))
+
+plot(density(qrrdata1$younemp14))
+plot(density(qrrdata1$younemp15))
+qrrdata1$logyounemp14 <- log(qrrdata1$younemp14)
+qrrdata1$logyounemp15 <- log(qrrdata1$younemp15)
+qrrdata1$logyounemp16 <- log(qrrdata1$younemp16)
+qrrdata1$logyounemp17 <- log(qrrdata1$younemp17)
+plot(density(qrrdata1$logyounemp14))
+
+plot(density(qrrdata1$childc14))
+plot(density(qrrdata1$childc15))
+qrrdata1$logchildc14 <- log(qrrdata1$childc14)
+qrrdata1$logchildc15 <- log(qrrdata1$childc15)
+qrrdata1$logchildc16 <- log(qrrdata1$childc16)
+qrrdata1$logchildc17 <- log(qrrdata1$childc17)
+plot(density(qrrdata1$logchildc14))
+
+plot(density(qrrdata1$empw14))
+qrrdata1$logempw14 <- NULL
+
+#Checking scatterplots for linearity of relationship
+
+plot(qrrdata1$logprod17, qrrdata1$logacad17, xlab = "Log productivity", ylab = "log academic")  #approx linear
+plot(qrrdata1$logprod17, qrrdata1$logyounemp17) #approx linear
+plot(qrrdata1$logprod17, qrrdata1$logchildc17) # no clear pattern
+plot(qrrdata1$logprod16, qrrdata1$logchildc16)
+plot(qrrdata1$logprod15, qrrdata1$logchildc15)
+plot(qrrdata1$logprod14, qrrdata1$logchildc14) #rather non-linear
+plot(qrrdata1$logprod17, qrrdata1$empw17)   #no clear pattern
+plot(qrrdata1$empw17, qrrdata1$logchildc17)  #slightly positive relationship
+plot(qrrdata1$hours17, qrrdata1$logchildc17) #positive relationship
+plot(qrrdata1$hours16, qrrdata1$logchildc16)
+plot(qrrdata1$logprod17, qrrdata1$hours17) #almost the same pattern as childcare
+plot(qrrdata1$age17, qrrdata1$logchildc17) #rather positive relationship
+plot(qrrdata1$age17, qrrdata1$logyounemp17)#rather positive relationship
+plot(qrrdata1$logacad17, qrrdata1$empw17)  #slightly negative relationship
+plot(qrrdata1$logacad17, qrrdata1$logchildc17) #no clear pattern
+plot(qrrdata1$logyounemp17, qrrdata1$logacad17)  #no clear pattern
+plot(qrrdata1$logyounemp17, qrrdata1$logchildc17)  #no clear pattern
+plot(qrrdata1$logprod17, qrrdata1$childc17)
+
+plot(qrrdata1$logprod17,qrrdata1$logchildc17, xlab="logprod17", ylab="logchildc17")
+
+qrrdatanoneast <- qrrdata1
+ 
+plot(qrrdata1$hours17, qrrdata1$acad17)
+
+plot(qrrdata1$hours17, qrrdata1$younemp17)
+
+#Transform hours variable to weekly hours per worker
+
+qrrdata1$weeklyhours14 <- (qrrdata1$hours14)/52
+qrrdata1$weeklyhours15 <- (qrrdata1$hours15)/52
+qrrdata1$weeklyhours16 <- (qrrdata1$hours16)/52
+qrrdata1$weeklyhours17 <- (qrrdata1$hours17)/52
+plot(qrrdata1$logchildc17, qrrdata1$weeklyhours17)
+plot(qrrdata1$logprod17, qrrdata1$weeklyhours17)
+
+plot(density(qrrdata1$weeklyhours14))
+qrrdata1$logweeklyhours14 <- log(qrrdata1$weeklyhours14)
+plot(density(qrrdata1$logweeklyhours14))
+qrrdata1$logweeklyhours14 <- NULL
+
+plot(qrrlong1$logchildc, qrrlong1$weeklyhours)
+
+#Merge with geodata for plotting maps
+
+mergeqrrgeo <- merge(plotgeo, qrrdata1, by.x = "id", by.y = "id", all.x = TRUE)
+qrrplotting <- mergeqrrgeo[order(mergeqrrgeo$order), ]
+
+qrrplotting$longitude <- qrrplotting$long*0.00001
+qrrplotting$latitude <- qrrplotting$lat*0.00001
+
+
+library(ggplot2)
+library(tidyr)
+library(tidyverse)
+
+
+#Create productivity intervals
+
+prodbreaks <- classInt::classIntervals(qrrplotting$logprod17, 8 , style = "quantile", rtimes = 3,
+                             intervalClosure = c("left", "right"), dataPrecision = NULL)
+
+
+
+prodmap17 <- ggplot() +
+  geom_polygon(data = qrrplotting, 
+               aes(x = longitude, y = latitude, group = group, fill = logprod17), 
+               color = "grey", size = 0.1) + 
+  coord_map() +  
+  theme_void() +
+  scale_fill_gradient(
+    name = "BIP/Erwerbstätigen",
+    low = "#fff7fb",
+    high = "#016450",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+
+print(prodmap17)
+
+prodmap14 <- ggplot() +
+  geom_polygon(data = qrrplotting, 
+               aes(x = longitude, y = latitude, group = group, fill = logprod14), 
+               color = "grey", size = 0.1) + 
+  coord_map() +  
+  theme_void() +
+  scale_fill_gradient(
+    name = "BIP/Erwerbstätigen",
+    low = "#fff7fb",
+    high = "#016450",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+
+print(prodmap14)
+
+
+empwmap17 <- ggplot() +
+  geom_polygon(data = qrrplotting, 
+               aes(x = longitude, y = latitude, group = group, fill = empw17), 
+               color = "grey", size = 0.1) + 
+  coord_map() +  
+  theme_void() +
+  scale_fill_gradient(
+    name = "BIP/Erwerbstätigen",
+    low = "#fff7fb",
+    high = "#016450",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+
+print(empwmap17)
+
+#Show top5 and least5 values of productivity in 2017
+qrrtopprod17 <- arrange(qrrdata1, qrrdata1$logprod17)
+topprod17 <- select(qrrtopprod17, municipalitiy, aggregate, logprod17)
+print(head(topprod17))
+print(tail(topprod17))
+
+qrrtopacad17 <- arrange(qrrdata1, qrrdata1$logacad17)
+topacad17 <- select(qrrtopacad17, municipalitiy, aggregate, logprod17)
+print(head(topacad17))
+print(tail(topacad17))
+
+qrrtopyounemp17 <- arrange(qrrdata1, qrrdata1$logyounemp17)
+topyounemp17 <- select(qrrtopyounemp17, municipalitiy, aggregate, logprod17)
+print(head(topyounemp17))
+print(tail(topyounemp17))
+
+qrrtopchildc17 <- arrange(qrrdata1, qrrdata1$logchildc17)
+topchildc17 <- select(qrrtopchildc17, municipalitiy, aggregate, logprod17)
+print(head(topchildc17))
+print(tail(topchildc17))
+
+#Reshape data in long format for consecutive years
+
+qrrlong <- gather(qrrdata1, varname, varvalue, prod14:weeklyhours17)
+
+right = function(text, num_char) {
+  substr(text, nchar(text) - (num_char-1), nchar(text))
+}
+left = function(text, num_char) {
+  substr(text, 1, num_char)
+}
+
+qrrlong$year <- right(qrrlong$varname, 2)
+qrrlong$year <- as.numeric(as.character(qrrlong$year))
+
+qrrlong$varname <- substr(qrrlong$varname, 1, nchar(qrrlong$varname)-2)
+qrrlong <- spread(qrrlong, varname, varvalue)
+
+
+#Estimation of linear models
+
+linear1 <- lm(qrrlong1$logprod ~ qrrlong1$logacad + qrrlong1$logchildc + qrrlong1$logyounemp +qrrlong1$east)
+summary(linear1)
+
+linear2 <- lm(qrrlong$logprod ~ qrrlong$logacad + qrrlong$logchildc + qrrlong$logyounemp + qrrlong$age)
+summary(linear2)
+
+linear3 <- lm(qrrlong$logprod ~ qrrlong$logacad + qrrlong$empw + qrrlong$logyounemp + qrrlong$age)
+summary(linear3)
+
+linear4 <- lm(qrrlong$logprod ~ qrrlong$logacad + qrrlong$empw + qrrlong$logyounemp + qrrlong$weeklyhours)
+summary(linear4)
+
+linear5 <- lm(qrrlong$logprod ~ qrrlong$logacad + qrrlong$childc + qrrlong$logyounemp + qrrlong$weeklyhours)
+summary(linear5)
+
+linear6 <- lm(qrrlong$logprod ~ qrrlong$logacad + qrrlong$logyounemp + qrrlong$weeklyhours + qrrlong$year)
+summary(linear6)
+
+#Indicator variables for East Germany (Berlin excluded) and Urban areas(independent municipalities)
+
+qrrlong1 <- qrrlong
+qrrlong1$east = 0
+qrrlong1$east[qrrlong1$id > 11000] = 1
+
+qrrlong1$urban = 0
+qrrlong1$urban[qrrlong1$aggregate == "krsfr. Stadt"] = 1
+
+linear7 <- lm(qrrlong1$logprod ~ qrrlong1$logacad + qrrlong1$childc + qrrlong1$logyounemp + qrrlong1$weeklyhours + qrrlong1$east + qrrlong1$urban)
+summary(linear7)
+
+linear8 <- lm(qrrlong1$logprod ~ qrrlong1$logacad + qrrlong1$childc + qrrlong1$logyounemp  + qrrlong1$east +qrrlong1$urban)
+summary(linear8)
+
+linear9 <- lm(qrrlong1$logprod ~ qrrlong1$logacad + qrrlong1$logyounemp + qrrlong1$empw + qrrlong1$east + qrrlong1$urban)
+summary(linear9)
+
+qrrlong1$hourssquared <- (qrrlong1$weeklyhours)^2
+
+
+linear10 <- lm(qrrlong1$logprod ~ qrrlong1$logacad + qrrlong1$logyounemp + qrrlong1$weeklyhours + qrrlong1$hourssquared + qrrlong1$east)
+summary(linear10)
+
+
+rsquaredlm10 <- summary(linear10)$r.squared
+print(rsquaredlm10)
+
+
+
+lm10coefficients <- summary(linear10)$coefficients[1, ]
+
+lm10rse <- summary(linear10)$sigma
+
+lm10fstat <- summary(linear10)$fstatistic
+
+#Modell mit BayesX
+
+library(R2BayesX)
+library(BayesX)
+options(bayesx.bin = "C:/BayesX")
+
+bayesformel1 <- logprod ~ logacad + logyounemp + sx(logchildc) + year + sx(id, bs="gk", map=admbnd)
+bayesmodel1 <- bayesx(bayesformel1, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel1)
+
+bayesformel2 <- logprod ~ logacad + logyounemp + sx(logchildc) + east + year + sx(id, bs="gk", map=admbnd)
+bayesmodel2 <- bayesx(bayesformel2, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel2)
+
+bayesformel2 <- logprod ~ logacad + logyounemp + weeklyhours + year + east + urban + sx(id, bs="gk", map=admbnd)
+bayesmodel2 <- bayesx(bayesformel2, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel2)
+
+bayesformel3 <- logprod ~ logacad + logyounemp + sx(weeklyhours) + east + urban + sx(id, bs="gk", map=admbnd)
+bayesmodel3 <- bayesx(bayesformel3, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel3)
+
+bayesformel4 <- logprod ~ sx(logacad) + logyounemp + weeklyhours + year + sx(id, bs="gk", map=admbnd)
+bayesmodel4 <- bayesx(bayesformel4, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel4)
+
+
+
+plot(bayesmodel2, term = "weeklyhours")
+plot(bayesmodel3, term = "sx(weeklyhours)") #larger variance, linear modeling preferred
+plot(bayesmodel1, term = "logacad") #higher variance at both ends
+plot(bayesmodel4, term = "sx(logacad)") #linear modeling preferable
+plot(bayesmodel1, term = "younemp")
+plot(bayesmodel1, term = "year")
+plot(bayesmodel3, term = "east") #variance relatively high compared to urban
+plot(bayesmodel3, term = "urban")
+
+plot(bayesmodel1, term = "year")
+plot(bayesmodel1, term = "sx(logyounemp)")
+plot(bayesmodel1, term = "logacad")
+plot(bayesmodel1, term = "sx(logchildc)")
+
+
+qrrlong1$year.f <- factor(qrrlong1$year)
+linear10 <- lm(qrrlong1$logprod ~ qrrlong1$logacad + qrrlong1$logyounemp + qrrlong1$weeklyhours + qrrlong1$east + qrrlong1$urban + qrrlong1$year.f)
+summary(linear10)
+
+bayesformel5 <- logprod ~ logacad + logyounemp + weeklyhours + year.f + sx(id, bs="gk", map=admbnd)
+bayesmodel5 <- bayesx(bayesformel5, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel5)
+
+bayesformel6 <- logprod ~ logacad + logyounemp + weeklyhours + year.f + east + sx(id, bs="gk", map=admbnd)
+bayesmodel6 <- bayesx(bayesformel6, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel6)
+
+bayesformel7 <- logprod ~ logacad + logyounemp + weeklyhours + year.f + east + urban + sx(id, bs="gk", map=admbnd)
+bayesmodel7 <- bayesx(bayesformel7, family = "gaussian", method = "REML", seed = 123, data = qrrlong1)
+
+summary(bayesmodel7)
+
+
+#Extract spatial residuals
+
+bayesx_logfile(bayesmodel5)
+
+
+
+spatialsm1 <- bayesmodel1[["effects"]][["sx(id)"]]
+
+spatialsm1$`2.5%` <- NULL
+spatialsm1$`10%` <- NULL
+spatialsm1$`90%` <- NULL
+spatialsm1$`97.5%` <- NULL
+spatialsm1$pcat95 <- NULL
+spatialsm1$pcat80 <- NULL
+
+colnames(spatialsm1) = c("id", "long", "lat", "estimate", "standard error")
+
+
+
+#Merge spatial effects with plotting dataset
+
+plottingspatial <- merge(qrrplotting, spatialsm1, by.x = "id", by.y = "id", all.x = TRUE)
+plottingspatial <- plottingspatial[order(plottingspatial$order), ] 
+
+#Map spatial residuals 
+
+spatialsmap1 <- ggplot() +
+  geom_polygon(data = plottingspatial, 
+               aes(x = long.x, y = lat.x, group = group, fill = estimate), 
+               color = "grey", size = 0.2) + 
+  coord_map() +
+  theme_void() +
+  scale_fill_gradient(
+    name = "log academic",
+    low = "#ffffcc",
+    high = "#800026",
+    space = "Lab",
+    guide = "colourbar",
+    aesthetics = "fill"
+  ) +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+print(spatialsmap1)
+
+
+#Spatial effects for model6
+
+bayesx_logfile(bayesmodel6)
+
+spatialsm2 <- bayesmodel2[["effects"]][["sx(id)"]]
+
+spatialsm2$`2.5%` <- NULL
+spatialsm2$`10%` <- NULL
+spatialsm2$`90%` <- NULL
+spatialsm2$`97.5%` <- NULL
+spatialsm2$pcat95 <- NULL
+spatialsm2$pcat80 <- NULL
+
+colnames(spatialsm2) <- c("id", "long", "lat", "estimate", "std. error")
+
+plottingspatial2 <- merge(qrrplotting, spatialsm2, by.x = "id", by.y = "id", all.x = TRUE)
+plottingspatial2 <- plottingspatial2[order(plottingspatial2$order), ] 
+
+spatialsmap2 <- ggplot() +
+  geom_polygon(data = plottingspatial2, 
+               aes(x = long.x, y = lat.x, group = group, fill = estimate), 
+               color = "grey", size = 0.2) + 
+  coord_map() +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+print(spatialsmap2)
+
+# Spatials for model 7
+
+bayesx_logfile(bayesmodel7)
+
+spatialsm7 <- bayesmodel7[["effects"]][["sx(id)"]]
+
+spatialsm7$`2.5%` <- NULL
+spatialsm7$`10%` <- NULL
+spatialsm7$`90%` <- NULL
+spatialsm7$`97.5%` <- NULL
+spatialsm7$pcat95 <- NULL
+spatialsm7$pcat80 <- NULL
+
+colnames(spatialsm7) <- c("id", "long", "lat", "estimate", "std. error")
+
+
+plottingspatial3 <- merge(qrrplotting, spatialsm7, by.x = "id", by.y = "id", all.x = TRUE)
+plottingspatial3 <- plottingspatial3[order(plottingspatial3$order), ] 
+
+spatialsmap3 <- ggplot() +
+  geom_polygon(data = plottingspatial3, 
+               aes(x = long.x, y = lat.x, group = group, fill = estimate), 
+               color = "grey", size = 0.2) + 
+  coord_map() +
+  coord_fixed(ratio = 1, xlim = NULL, ylim = NULL, expand = TRUE) 
+
+print(spatialsmap3)
